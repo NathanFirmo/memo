@@ -1,0 +1,44 @@
+version: "3"
+
+vars:
+  BINARY: memo
+  BUILD_DIR: bin
+  BUILD_PATH: "{{.BUILD_DIR}}/{{.BINARY}}"
+  INSTALL_PATH: /usr/bin/{{.BINARY}}
+  GO_TAGS: sqlite_fts5
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list-all
+
+  build:
+    desc: Build the Memo CLI
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -tags "{{.GO_TAGS}}" -o {{.BUILD_PATH}} ./cmd/memo
+    sources:
+      - go.mod
+      - cmd/**/*.go
+      - internal/**/*.go
+      - internal/**/*.sql
+    generates:
+      - "{{.BUILD_PATH}}"
+
+  install:
+    desc: Install Memo to /usr/bin
+    deps:
+      - build
+    cmds:
+      - sudo install -m 0755 {{.BUILD_PATH}} {{.INSTALL_PATH}}
+
+  clean:
+    desc: Remove local build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+
+  test:
+    desc: Run Go tests with SQLite FTS5
+    cmds:
+      - go test -tags "{{.GO_TAGS}}" ./...
