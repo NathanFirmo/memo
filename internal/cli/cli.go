@@ -29,6 +29,8 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return runSearch(args[1:], stdout)
 	case "mcp":
 		return runMCP(args[1:], stdout)
+	case "embed":
+		return runEmbed(args[1:], stdout)
 	case "doctor":
 		return runDoctor(args[1:], stdout)
 	case "stats":
@@ -138,6 +140,38 @@ func runMCP(args []string, stdout io.Writer) error {
 	return mcp.Serve(context.Background(), s, stdout, nil)
 }
 
+func runEmbed(args []string, stdout io.Writer) error {
+	fs, home, db := commonFlags("embed")
+	limit := fs.Int("limit", 0, "maximum memories to process; 0 means all")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	s, _, err := openStore(*home, *db)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	missing, err := s.MemoriesMissingEmbeddings(ctx, *limit)
+	if err != nil {
+		return err
+	}
+	client := embed.NewClient("", "")
+	for _, item := range missing {
+		vector, err := client.Embed(ctx, item.Title+"\n"+item.Body)
+		if err != nil {
+			return fmt.Errorf("embed memory %d: %w", item.ID, err)
+		}
+		if err := s.UpsertMemoryVector(ctx, item.ID, vector); err != nil {
+			return fmt.Errorf("store embedding for memory %d: %w", item.ID, err)
+		}
+	}
+	fmt.Fprintf(stdout, "embeddings processed: %d\n", len(missing))
+	return nil
+}
+
 func runDoctor(args []string, stdout io.Writer) error {
 	fs, home, db := commonFlags("doctor")
 	if err := fs.Parse(args); err != nil {
@@ -244,8 +278,10 @@ Usage:
   memo search "query"
   memo stats
   memo doctor
+  memo embed
   memo mcp
   memo agent install --agent codex
+  memo agent uninstall --agent codex
 
 Options:
   --home PATH   override Memo home directory

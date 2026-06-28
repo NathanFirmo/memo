@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/NathanFirmo/memo/internal/embed"
 )
 
 const (
@@ -87,6 +89,9 @@ func (i Installer) installCodex(home string) error {
 	if err := upsertManagedBlock(filepath.Join(home, ".codex", "AGENTS.md"), Instructions()); err != nil {
 		return err
 	}
+	if err := upsertCodexMCP(filepath.Join(home, ".codex", "config.toml")); err != nil {
+		return err
+	}
 	marketplace, err := ensureCodexMarketplace(filepath.Join(home, ".agents", "plugins", "marketplace.json"))
 	if err != nil {
 		return err
@@ -111,6 +116,9 @@ func (i Installer) installClaude(home string) error {
 	if err := upsertClaudeMCP(filepath.Join(home, ".claude.json")); err != nil {
 		return err
 	}
+	if err := upsertClaudeMCP(filepath.Join(home, ".claude", "mcp.json")); err != nil {
+		return err
+	}
 	if err := removeClaudeHookCommands(filepath.Join(home, ".claude", "settings.json")); err != nil {
 		return err
 	}
@@ -128,21 +136,36 @@ func (i Installer) uninstallCodex(home string) error {
 			_ = run(context.Background(), "codex", "plugin", "remove", pluginName+"@personal")
 		}
 	}
+	if err := removeCodexMCP(filepath.Join(home, ".codex", "config.toml")); err != nil {
+		return err
+	}
+	if err := removeCodexMarketplace(filepath.Join(home, ".agents", "plugins", "marketplace.json")); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(filepath.Join(home, "plugins", pluginName)); err != nil {
+		return err
+	}
 	if err := removeManagedBlock(filepath.Join(home, ".codex", "AGENTS.md")); err != nil {
 		return err
 	}
-	fmt.Fprintln(i.Stdout, "Codex Memo instructions removed")
+	fmt.Fprintln(i.Stdout, "Codex Memo files removed")
 	return nil
 }
 
 func (i Installer) uninstallClaude(home string) error {
+	if err := removeClaudeMCP(filepath.Join(home, ".claude", "mcp.json")); err != nil {
+		return err
+	}
+	if err := removeClaudeMCP(filepath.Join(home, ".claude.json")); err != nil {
+		return err
+	}
 	if err := removeClaudeHookCommands(filepath.Join(home, ".claude", "settings.json")); err != nil {
 		return err
 	}
 	if err := removeManagedBlock(filepath.Join(home, ".claude", "CLAUDE.md")); err != nil {
 		return err
 	}
-	fmt.Fprintln(i.Stdout, "Claude Memo instructions removed")
+	fmt.Fprintln(i.Stdout, "Claude Memo files removed")
 	return nil
 }
 
@@ -155,12 +178,14 @@ Memo is the user's local long-term memory. Search Memo for relevant context when
 
 Use memory hygienically. Do not save secrets, raw transcript dumps, command output, generic final answers or short-lived implementation chatter.
 
+Memory length: keep each memory at or below %d runes because Memo embeddings are generated through Ollama with that input limit. If the source text is longer, save several different focused memories instead of one large memory. Each memory should capture one durable preference, decision, procedure, warning or project convention.
+
 MCP tools:
 
 - memo_add_memory
 - memo_search_memory
 - memo_memory_stats
-%s`, managedStart, managedEnd)
+%s`, managedStart, embed.MaxInputRunes, managedEnd)
 }
 
 func normalizeAgent(agent string) string {
@@ -229,6 +254,53 @@ func removeManagedBlock(path string) error {
 	return writeFile(path, []byte(strings.TrimSpace(next)+"\n"), 0o644)
 }
 
+func upsertCodexMCP(path string) error {
+	content, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return writeFile(path, []byte(codexMCPTable()), 0o600)
+	}
+	if err != nil {
+		return err
+	}
+	text := removeTOMLTable(string(content), "[mcp_servers.memo]")
+	text = strings.TrimRight(text, "\n") + "\n\n" + codexMCPTable()
+	return writeFile(path, []byte(strings.TrimSpace(text)+"\n"), 0o600)
+}
+
+func removeCodexMCP(path string) error {
+	content, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	text := removeTOMLTable(string(content), "[mcp_servers.memo]")
+	if strings.TrimSpace(text) == "" {
+		return os.Remove(path)
+	}
+	return writeFile(path, []byte(strings.TrimSpace(text)+"\n"), 0o600)
+}
+
+func removeTOMLTable(text, table string) string {
+	lines := strings.Split(text, "\n")
+	var kept []string
+	removing := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			removing = trimmed == table
+			if removing {
+				continue
+			}
+		}
+		if !removing {
+			kept = append(kept, line)
+		}
+	}
+	return strings.TrimSpace(strings.Join(kept, "\n"))
+}
+
 func upsertClaudeMCP(path string) error {
 	root := map[string]any{}
 	_ = readJSON(path, &root)
@@ -237,7 +309,26 @@ func upsertClaudeMCP(path string) error {
 		servers = map[string]any{}
 		root["mcpServers"] = servers
 	}
-	servers["memo"] = map[string]any{"type": "stdio", "command": "memo", "args": []any{"mcp"}}
+	servers["memo"] = map[string]any{"command": "memo", "args": []any{"mcp"}}
+	return writeJSON(path, root)
+}
+
+func removeClaudeMCP(path string) error {
+	root := map[string]any{}
+	if err := readJSON(path, &root); err != nil {
+		return err
+	}
+	servers, _ := root["mcpServers"].(map[string]any)
+	if servers == nil {
+		return nil
+	}
+	delete(servers, "memo")
+	if len(servers) == 0 {
+		delete(root, "mcpServers")
+	}
+	if len(root) == 0 {
+		return os.Remove(path)
+	}
 	return writeJSON(path, root)
 }
 
@@ -350,6 +441,36 @@ func ensureCodexMarketplace(path string) (string, error) {
 	return name, nil
 }
 
+func removeCodexMarketplace(path string) error {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	root := map[string]any{}
+	if err := readJSON(path, &root); err != nil {
+		return err
+	}
+	plugins, _ := root["plugins"].([]any)
+	var kept []any
+	for _, item := range plugins {
+		plugin, _ := item.(map[string]any)
+		if plugin["name"] == pluginName {
+			continue
+		}
+		kept = append(kept, item)
+	}
+	if len(kept) == 0 {
+		delete(root, "plugins")
+	} else {
+		root["plugins"] = kept
+	}
+	if len(root) == 0 {
+		return os.Remove(path)
+	}
+	return writeJSON(path, root)
+}
+
 func run(ctx context.Context, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	var stderr bytes.Buffer
@@ -385,6 +506,13 @@ func mcpConfig() string {
     }
   }
 }
+`
+}
+
+func codexMCPTable() string {
+	return `[mcp_servers.memo]
+command = "memo"
+args = ["mcp"]
 `
 }
 

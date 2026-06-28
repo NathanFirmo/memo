@@ -58,6 +58,8 @@ type Stats struct {
 	Memories int64 `json:"memories"`
 }
 
+const DefaultMinVectorScore = 0.76
+
 func Open(opts OpenOptions) (*Store, error) {
 	if opts.Home == "" || opts.DB == "" {
 		return nil, fmt.Errorf("home and db path are required")
@@ -170,6 +172,74 @@ func (s *Store) AddMemory(ctx context.Context, input MemoryInput, vector []float
 	return id, tx.Commit()
 }
 
+func (s *Store) MemoriesMissingEmbeddings(ctx context.Context, limit int) ([]memory.Memory, error) {
+	if limit <= 0 {
+		limit = -1
+	}
+	hasVectorTable, err := s.tableExists("memory_vec")
+	if err != nil {
+		return nil, err
+	}
+	query := `
+		SELECT id, title, body, created_at
+		FROM memories
+		ORDER BY id
+		LIMIT ?
+	`
+	if hasVectorTable {
+		query = `
+			SELECT m.id, m.title, m.body, m.created_at
+			FROM memories m
+			WHERE NOT EXISTS (
+				SELECT 1 FROM memory_vec v WHERE v.rowid = m.id
+			)
+			ORDER BY m.id
+			LIMIT ?
+		`
+	}
+	rows, err := s.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []memory.Memory
+	for rows.Next() {
+		var item memory.Memory
+		var createdAt string
+		if err := rows.Scan(&item.ID, &item.Title, &item.Body, &createdAt); err != nil {
+			return nil, err
+		}
+		if err := parseTimes(&item, createdAt); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) UpsertMemoryVector(ctx context.Context, id int64, vector []float32) error {
+	if len(vector) == 0 {
+		return fmt.Errorf("embedding vector is required")
+	}
+	if err := s.EnsureVectorTable(len(vector)); err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM memory_vec WHERE rowid = ?`, id); err != nil {
+		return err
+	}
+	if err := insertVector(ctx, tx, id, vector); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *Store) Search(ctx context.Context, opts SearchOptions) ([]SearchResult, error) {
 	if opts.Limit <= 0 {
 		opts.Limit = 10
@@ -189,8 +259,12 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) ([]SearchResult,
 		}
 	}
 	results := make([]SearchResult, 0, len(candidates))
+	minVectorScore := opts.MinVectorScore
+	if minVectorScore == 0 && len(opts.Vector) > 0 {
+		minVectorScore = DefaultMinVectorScore
+	}
 	for _, item := range candidates {
-		if opts.MinVectorScore > 0 && item.VectorScore > 0 && item.VectorScore < opts.MinVectorScore && item.FTSScore == 0 {
+		if minVectorScore > 0 && item.VectorScore > 0 && item.VectorScore < minVectorScore && item.FTSScore == 0 {
 			continue
 		}
 		item.Score = item.FTSScore + item.VectorScore
@@ -266,6 +340,12 @@ func (s *Store) searchVector(ctx context.Context, opts SearchOptions) ([]SearchR
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) tableExists(name string) (bool, error) {
+	var exists int
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?)`, name).Scan(&exists)
+	return exists == 1, err
 }
 
 func insertVector(ctx context.Context, tx *sql.Tx, id int64, vector []float32) error {

@@ -33,6 +33,7 @@ memo add --title "Preference" --body "Use concise answers."
 memo search "concise answers"
 memo stats
 memo doctor
+memo embed
 memo mcp
 memo agent install --agent codex
 ```
@@ -65,4 +66,15 @@ Memo can install minimal agent memory instructions and MCP config:
 ```bash
 memo agent install --agent codex
 memo agent install --agent claude
+memo agent uninstall --agent codex
+memo agent uninstall --agent claude
+```
+
+## Manual SQLite Writes
+
+You can insert memories directly into the SQLite `memories` table. Full-text search is updated by SQLite triggers immediately, but semantic search needs embeddings to be backfilled:
+
+```bash
+memo embed
+memo embed --limit 100
 ```

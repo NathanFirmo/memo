@@ -12,7 +12,7 @@ func TestHelpShowsMinimalCommands(t *testing.T) {
 		t.Fatalf("help: %v", err)
 	}
 	text := stdout.String()
-	for _, want := range []string{"memo add", "memo search", "memo stats", "memo doctor", "memo mcp", "memo agent install"} {
+	for _, want := range []string{"memo add", "memo search", "memo stats", "memo doctor", "memo embed", "memo mcp", "memo agent install", "memo agent uninstall"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("help missing %q:\n%s", want, text)
 		}
