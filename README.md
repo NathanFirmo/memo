@@ -31,6 +31,7 @@ ollama pull mxbai-embed-large
 ```bash
 memo add --title "Preference" --body "Use concise answers."
 memo search "concise answers"
+memo remove 1
 memo stats
 memo doctor
 memo embed
@@ -56,6 +57,7 @@ Memo creates the database automatically. Override paths with `MEMO_HOME`, `MEMO_
 Tools:
 
 - `memo_add_memory`
+- `memo_remove_memory`
 - `memo_search_memory`
 - `memo_memory_stats`
 

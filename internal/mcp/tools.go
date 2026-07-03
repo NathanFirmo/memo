@@ -14,6 +14,7 @@ import (
 
 var ToolNames = []string{
 	"memo_add_memory",
+	"memo_remove_memory",
 	"memo_search_memory",
 	"memo_memory_stats",
 }
@@ -115,6 +116,16 @@ func callTool(ctx context.Context, s *store.Store, raw json.RawMessage) (any, er
 			return nil, err
 		}
 		return textResult(fmt.Sprintf("memory added: %d", id)), nil
+	case "memo_remove_memory":
+		id := int64Arg(args, "id", 0)
+		deleted, err := s.DeleteMemory(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if !deleted {
+			return nil, fmt.Errorf("memory %d not found", id)
+		}
+		return textResult(fmt.Sprintf("memory removed: %d", id)), nil
 	case "memo_search_memory":
 		query := stringArg(args, "query", "")
 		vector := embedIfPossible(ctx, s, query)
@@ -166,6 +177,8 @@ func description(name string) string {
 	switch name {
 	case "memo_add_memory":
 		return "Store a durable local memory."
+	case "memo_remove_memory":
+		return "Remove a stored memory by id."
 	case "memo_search_memory":
 		return "Search local memories."
 	case "memo_memory_stats":
@@ -200,6 +213,19 @@ func intArg(args map[string]any, key string, fallback int) int {
 		return int(value)
 	case int:
 		return value
+	default:
+		return fallback
+	}
+}
+
+func int64Arg(args map[string]any, key string, fallback int64) int64 {
+	switch value := args[key].(type) {
+	case float64:
+		return int64(value)
+	case int64:
+		return value
+	case int:
+		return int64(value)
 	default:
 		return fallback
 	}
