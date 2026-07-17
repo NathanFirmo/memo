@@ -1,8 +1,19 @@
 # Memo
 
+<div align=center>
+
+# classifier.js
+
+![Open Source Love](https://badges.frapsoft.com/os/mit/mit.svg?v=102)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+
+<img src="https://github.com/user-attachments/assets/601d242b-ed5e-4670-9ca8-11266923f999" width="330px" heigth="550px">
+
 Memo is a tiny local memory tool for AI agents.
 
 It stores notes in one SQLite database, searches them with FTS5, and uses local Ollama embeddings with `sqlite-vec` when available. If Ollama is not running, Memo still works with lexical search.
+
+</div>
 
 ## Principles
 
