@@ -2,8 +2,6 @@
 
 <div align=center>
 
-# classifier.js
-
 ![Open Source Love](https://badges.frapsoft.com/os/mit/mit.svg?v=102)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
