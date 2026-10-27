@@ -604,3 +604,26 @@ func semanticCategory(title string) string {
 func fmtFloat(v float64) string {
 	return strconv.FormatFloat(v, 'f', 4, 64)
 }
+
+func TestSearchMatchesNonASCIILetters(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(OpenOptions{Home: dir, DB: filepath.Join(dir, "memo.db")})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	if _, err := s.AddMemory(ctx, MemoryInput{Title: "Über configuração", Body: "Straße naïve"}, nil); err != nil {
+		t.Fatalf("add memory: %v", err)
+	}
+	for _, query := range []string{"über", "uber", "configuração", "configuracao", "straße", "naive"} {
+		results, err := s.Search(ctx, SearchOptions{Query: query, Limit: 5})
+		if err != nil {
+			t.Fatalf("search %q: %v", query, err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("search %q got %d results, want 1", query, len(results))
+		}
+	}
+}

@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/NathanFirmo/memo/internal/config"
 	"github.com/NathanFirmo/memo/internal/memory"
@@ -433,35 +435,19 @@ func quoteFTS(query string) string {
 }
 
 func ftsQueryTokens(query string) []string {
-	words := strings.FieldsFunc(normalizeFTSQuery(query), func(r rune) bool {
-		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	words := strings.FieldsFunc(strings.ToLower(query), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	})
 	seen := map[string]bool{}
 	var tokens []string
 	for _, word := range words {
-		if len(word) < 3 || seen[word] {
+		if utf8.RuneCountInString(word) < 3 || seen[word] {
 			continue
 		}
 		seen[word] = true
 		tokens = append(tokens, word)
 	}
 	return tokens
-}
-
-func normalizeFTSQuery(query string) string {
-	query = strings.ToLower(query)
-	replacements := map[string]string{
-		"á": "a", "à": "a", "â": "a", "ã": "a",
-		"é": "e", "ê": "e",
-		"í": "i",
-		"ó": "o", "ô": "o", "õ": "o",
-		"ú": "u",
-		"ç": "c",
-	}
-	for from, to := range replacements {
-		query = strings.ReplaceAll(query, from, to)
-	}
-	return query
 }
 
 type rowScanner interface {
