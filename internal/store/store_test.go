@@ -627,3 +627,47 @@ func TestSearchMatchesNonASCIILetters(t *testing.T) {
 		}
 	}
 }
+
+func TestDirectSQLiteUpdatesAndDeletesKeepSearchInSync(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(OpenOptions{Home: dir, DB: filepath.Join(dir, "memo.db")})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	id, err := s.AddMemory(ctx, MemoryInput{Title: "Original", Body: "alpha note"}, nil)
+	if err != nil {
+		t.Fatalf("add memory: %v", err)
+	}
+	search := func(query string) int {
+		t.Helper()
+		results, err := s.Search(ctx, SearchOptions{Query: query, Limit: 5})
+		if err != nil {
+			t.Fatalf("search %q: %v", query, err)
+		}
+		return len(results)
+	}
+
+	if _, err := s.db.Exec(`UPDATE memories SET body = 'bravo note' WHERE id = ?`, id); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got := search("alpha"); got != 0 {
+		t.Fatalf("stale term alpha got %d results, want 0", got)
+	}
+	if got := search("bravo"); got != 1 {
+		t.Fatalf("updated term bravo got %d results, want 1", got)
+	}
+
+	if _, err := s.db.Exec(`DELETE FROM memories WHERE id = ?`, id); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	var ftsRows int
+	if err := s.db.QueryRow(`SELECT count(*) FROM memory_fts WHERE memory_fts MATCH 'bravo'`).Scan(&ftsRows); err != nil {
+		t.Fatalf("count fts rows: %v", err)
+	}
+	if ftsRows != 0 {
+		t.Fatalf("fts still has %d rows for deleted memory", ftsRows)
+	}
+}

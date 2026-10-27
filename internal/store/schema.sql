@@ -24,3 +24,15 @@ CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
   INSERT INTO memory_fts(rowid, title, body)
   VALUES (new.id, new.title, new.body);
 END;
+
+CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+  INSERT INTO memory_fts(memory_fts, rowid, title, body)
+  VALUES ('delete', old.id, old.title, old.body);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+  INSERT INTO memory_fts(memory_fts, rowid, title, body)
+  VALUES ('delete', old.id, old.title, old.body);
+  INSERT INTO memory_fts(rowid, title, body)
+  VALUES (new.id, new.title, new.body);
+END;
