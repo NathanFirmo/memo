@@ -47,6 +47,47 @@ func TestAddAndSearchMemory(t *testing.T) {
 	}
 }
 
+func TestSearchRanksStrongerLexicalMatchesFirst(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(OpenOptions{Home: dir, DB: filepath.Join(dir, "memo.db")})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	for i := 0; i < 50; i++ {
+		if _, err := s.AddMemory(ctx, MemoryInput{Title: "Filler " + strconv.Itoa(i), Body: "unrelated note about lunch"}, nil); err != nil {
+			t.Fatalf("add filler: %v", err)
+		}
+	}
+	inputs := []MemoryInput{
+		{Title: "Weak", Body: "kubernetes " + strings.Repeat("unrelated padding words ", 30)},
+		{Title: "Strong", Body: "kubernetes kubernetes kubernetes cluster"},
+	}
+	for _, input := range inputs {
+		if _, err := s.AddMemory(ctx, input, nil); err != nil {
+			t.Fatalf("add memory: %v", err)
+		}
+	}
+
+	results, err := s.Search(ctx, SearchOptions{Query: "kubernetes", Limit: 5})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("got %d results, want 2", len(results))
+	}
+	if results[0].Memory.Title != "Strong" {
+		t.Fatalf("got first result %q, want Strong\n%s", results[0].Memory.Title, formatSearchResults(results))
+	}
+	for _, result := range results {
+		if result.FTSScore <= 0 || result.FTSScore > 1 {
+			t.Fatalf("fts score %v out of (0, 1] for %q", result.FTSScore, result.Memory.Title)
+		}
+	}
+}
+
 func TestStats(t *testing.T) {
 	dir := t.TempDir()
 	s, err := Open(OpenOptions{Home: dir, DB: filepath.Join(dir, "memo.db")})

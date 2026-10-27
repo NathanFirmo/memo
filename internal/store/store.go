@@ -330,7 +330,7 @@ func (s *Store) Stats(ctx context.Context) (Stats, error) {
 func (s *Store) searchFTS(ctx context.Context, opts SearchOptions) ([]SearchResult, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT m.id, m.title, m.body, m.created_at,
-		       1.0 / (1.0 + bm25(memory_fts)) AS fts_score
+		       -bm25(memory_fts) / (1.0 - bm25(memory_fts)) AS fts_score
 		FROM memory_fts
 		JOIN memories m ON m.id = memory_fts.rowid
 		WHERE memory_fts MATCH ?
