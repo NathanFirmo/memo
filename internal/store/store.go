@@ -471,7 +471,3 @@ func parseTime(value string) (time.Time, error) {
 func now() string {
 	return time.Now().UTC().Format(time.RFC3339Nano)
 }
-
-func MigrationNames() ([]string, error) {
-	return []string{"0001_initial.sql"}, nil
-}

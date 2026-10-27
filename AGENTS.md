@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Memo is a small Go CLI and MCP server. The entry point lives in `cmd/memo/main.go`. Package code is under `internal/`: `cli` handles commands, `mcp` exposes MCP tools, `store` owns SQLite persistence, `memory` contains shared memory types, `embed` integrates Ollama embeddings, `config` handles paths and environment, and `agent` installs agent configuration. SQL schema files are in `internal/store/schema.sql` and versioned migrations are in `migrations/`.
+Memo is a small Go CLI and MCP server. The entry point lives in `cmd/memo/main.go`. Package code is under `internal/`: `cli` handles commands, `mcp` exposes MCP tools, `store` owns SQLite persistence, `memory` contains shared memory types, `embed` integrates Ollama embeddings, `config` handles paths and environment, and `agent` installs agent configuration. The SQL schema lives in `internal/store/schema.sql`.
 
 Tests sit next to the packages they cover using Go's standard `*_test.go` pattern, such as `internal/store/store_test.go`.
 
@@ -20,7 +20,7 @@ Optional semantic search depends on a local Ollama model, for example `ollama pu
 
 Use standard Go formatting: run `gofmt` on changed Go files before committing. Keep package names short, lowercase, and aligned with directory names. Prefer clear exported names only for cross-package APIs; keep helpers unexported when package-local.
 
-Follow the existing error-handling style: return contextual errors rather than panicking, and keep CLI-facing text concise. Keep SQL changes in schema or migration files, not embedded ad hoc strings unless package-local behavior requires it.
+Follow the existing error-handling style: return contextual errors rather than panicking, and keep CLI-facing text concise. Keep SQL changes in the schema file, not embedded ad hoc strings unless package-local behavior requires it.
 
 ## Testing Guidelines
 
