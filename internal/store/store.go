@@ -172,6 +172,46 @@ func (s *Store) AddMemory(ctx context.Context, input MemoryInput, vector []float
 	return id, tx.Commit()
 }
 
+func (s *Store) DeleteMemory(ctx context.Context, id int64) (bool, error) {
+	if id <= 0 {
+		return false, fmt.Errorf("memory id must be positive")
+	}
+	hasVectorTable, err := s.tableExists("memory_vec")
+	if err != nil {
+		return false, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	var title, body string
+	err = tx.QueryRowContext(ctx, `SELECT title, body FROM memories WHERE id = ?`, id).Scan(&title, &body)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO memory_fts(memory_fts, rowid, title, body)
+		VALUES ('delete', ?, ?, ?)
+	`, id, title, body); err != nil {
+		return false, err
+	}
+	if hasVectorTable {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM memory_vec WHERE rowid = ?`, id); err != nil {
+			return false, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM memories WHERE id = ?`, id); err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
+}
+
 func (s *Store) MemoriesMissingEmbeddings(ctx context.Context, limit int) ([]memory.Memory, error) {
 	if limit <= 0 {
 		limit = -1

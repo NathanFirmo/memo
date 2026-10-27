@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,8 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return runAdd(args[1:], stdout)
 	case "search":
 		return runSearch(args[1:], stdout)
+	case "remove", "delete", "rm":
+		return runRemove(args[1:], stdout)
 	case "mcp":
 		return runMCP(args[1:], stdout)
 	case "embed":
@@ -124,6 +127,36 @@ func runSearch(args []string, stdout io.Writer) error {
 	for _, result := range results {
 		fmt.Fprintf(stdout, "[%d] %.3f %s\n%s\n\n", result.Memory.ID, result.Score, result.Memory.Title, result.Memory.Body)
 	}
+	return nil
+}
+
+func runRemove(args []string, stdout io.Writer) error {
+	fs, home, db := commonFlags("remove")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("usage: memo remove ID")
+	}
+	id, err := strconv.ParseInt(fs.Arg(0), 10, 64)
+	if err != nil || id <= 0 {
+		return fmt.Errorf("memory id must be a positive integer")
+	}
+
+	s, _, err := openStore(*home, *db)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+
+	deleted, err := s.DeleteMemory(context.Background(), id)
+	if err != nil {
+		return err
+	}
+	if !deleted {
+		return fmt.Errorf("memory %d not found", id)
+	}
+	fmt.Fprintf(stdout, "memory removed\nid: %d\n", id)
 	return nil
 }
 
@@ -276,6 +309,7 @@ func printUsage(w io.Writer) {
 Usage:
   memo add --title "..." --body "..."
   memo search "query"
+  memo remove ID
   memo stats
   memo doctor
   memo embed

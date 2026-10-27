@@ -67,6 +67,75 @@ func TestStats(t *testing.T) {
 	}
 }
 
+func TestDeleteMemoryRemovesSearchAndVectorRows(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(OpenOptions{Home: dir, DB: filepath.Join(dir, "memo.db")})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer s.Close()
+	if err := s.EnsureVectorTable(3); err != nil {
+		t.Fatalf("ensure vector table: %v", err)
+	}
+
+	id, err := s.AddMemory(context.Background(), MemoryInput{
+		Title: "Remove me",
+		Body:  "This memory should disappear.",
+	}, []float32{0.1, 0.2, 0.3})
+	if err != nil {
+		t.Fatalf("add memory: %v", err)
+	}
+
+	deleted, err := s.DeleteMemory(context.Background(), id)
+	if err != nil {
+		t.Fatalf("delete memory: %v", err)
+	}
+	if !deleted {
+		t.Fatal("delete memory returned false")
+	}
+
+	results, err := s.Search(context.Background(), SearchOptions{Query: "remove disappear", Limit: 5})
+	if err != nil {
+		t.Fatalf("search deleted memory: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("deleted memory still searchable: %+v", results)
+	}
+
+	stats, err := s.Stats(context.Background())
+	if err != nil {
+		t.Fatalf("stats: %v", err)
+	}
+	if stats.Memories != 0 {
+		t.Fatalf("unexpected stats after delete: %+v", stats)
+	}
+
+	var vectorRows int
+	if err := s.db.QueryRow(`SELECT count(*) FROM memory_vec WHERE rowid = ?`, id).Scan(&vectorRows); err != nil {
+		t.Fatalf("count vector rows: %v", err)
+	}
+	if vectorRows != 0 {
+		t.Fatalf("deleted memory still has %d vector rows", vectorRows)
+	}
+}
+
+func TestDeleteMemoryMissingIDReturnsFalse(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(OpenOptions{Home: dir, DB: filepath.Join(dir, "memo.db")})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer s.Close()
+
+	deleted, err := s.DeleteMemory(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("delete missing memory: %v", err)
+	}
+	if deleted {
+		t.Fatal("delete missing memory returned true")
+	}
+}
+
 func TestMemoriesMissingEmbeddingsIncludesDirectSQLiteRows(t *testing.T) {
 	dir := t.TempDir()
 	s, err := Open(OpenOptions{Home: dir, DB: filepath.Join(dir, "memo.db")})
