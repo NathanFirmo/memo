@@ -83,3 +83,22 @@ func TestMCPAddSearchAndStats(t *testing.T) {
 		t.Fatalf("remove response missing confirmation: %s", out.String())
 	}
 }
+
+func TestMCPAcceptsRequestsLargerThanDefaultScannerBuffer(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.Open(store.OpenOptions{Home: dir, DB: filepath.Join(dir, "memo.db")})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer s.Close()
+
+	body := strings.Repeat("x", 128*1024)
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"memo_add_memory","arguments":{"title":"Large","body":"` + body + `"}}}` + "\n"
+	var out bytes.Buffer
+	if err := Serve(context.Background(), s, &out, strings.NewReader(input)); err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+	if !strings.Contains(out.String(), "memory added") {
+		t.Fatalf("unexpected response: %s", out.String())
+	}
+}

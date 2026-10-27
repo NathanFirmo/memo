@@ -19,6 +19,8 @@ var ToolNames = []string{
 	"memo_memory_stats",
 }
 
+const maxRequestBytes = 16 * 1024 * 1024
+
 type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      any             `json:"id,omitempty"`
@@ -43,6 +45,7 @@ func Serve(ctx context.Context, s *store.Store, out io.Writer, in io.Reader) err
 		in = os.Stdin
 	}
 	scanner := bufio.NewScanner(in)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxRequestBytes)
 	encoder := json.NewEncoder(out)
 	for scanner.Scan() {
 		select {
