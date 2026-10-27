@@ -54,6 +54,9 @@ func TestInstallerWritesClaudeMCPAndInstructions(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".claude", "CLAUDE.md")); err != nil {
 		t.Fatalf("expected Claude instructions: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(home, ".claude", "skills", pluginName, "SKILL.md")); err != nil {
+		t.Fatalf("expected Claude skill: %v", err)
+	}
 }
 
 func TestInstallerUninstallRemovesAgentFiles(t *testing.T) {
@@ -78,6 +81,9 @@ func TestInstallerUninstallRemovesAgentFiles(t *testing.T) {
 	}
 	if strings.Contains(string(codexConfig), "[mcp_servers.memo]") {
 		t.Fatalf("expected Codex memo MCP removed:\n%s", codexConfig)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".claude", "skills", pluginName)); !os.IsNotExist(err) {
+		t.Fatalf("expected Claude skill directory removed, got err %v", err)
 	}
 }
 

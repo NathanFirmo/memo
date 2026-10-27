@@ -113,6 +113,9 @@ func (i Installer) installCodex(home string) error {
 }
 
 func (i Installer) installClaude(home string) error {
+	if err := writeFile(filepath.Join(home, ".claude", "skills", pluginName, "SKILL.md"), []byte(skill()), 0o644); err != nil {
+		return err
+	}
 	if err := upsertClaudeMCP(filepath.Join(home, ".claude.json")); err != nil {
 		return err
 	}
@@ -153,6 +156,9 @@ func (i Installer) uninstallCodex(home string) error {
 }
 
 func (i Installer) uninstallClaude(home string) error {
+	if err := os.RemoveAll(filepath.Join(home, ".claude", "skills", pluginName)); err != nil {
+		return err
+	}
 	if err := removeClaudeMCP(filepath.Join(home, ".claude", "mcp.json")); err != nil {
 		return err
 	}
