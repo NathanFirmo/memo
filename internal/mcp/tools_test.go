@@ -102,3 +102,24 @@ func TestMCPAcceptsRequestsLargerThanDefaultScannerBuffer(t *testing.T) {
 		t.Fatalf("unexpected response: %s", out.String())
 	}
 }
+
+func TestToolDefinitionsDeclareArguments(t *testing.T) {
+	want := map[string][]string{
+		"memo_add_memory":    {"title", "body"},
+		"memo_remove_memory": {"id"},
+		"memo_search_memory": {"query", "limit", "min_vector_score"},
+		"memo_memory_stats":  {},
+	}
+	for _, tool := range toolDefinitions() {
+		name := tool["name"].(string)
+		properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+		if len(properties) != len(want[name]) {
+			t.Fatalf("%s has %d properties, want %d", name, len(properties), len(want[name]))
+		}
+		for _, arg := range want[name] {
+			if _, ok := properties[arg]; !ok {
+				t.Fatalf("%s schema missing %q", name, arg)
+			}
+		}
+	}
+}

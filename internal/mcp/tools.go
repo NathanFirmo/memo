@@ -170,10 +170,37 @@ func toolDefinitions() []map[string]any {
 		tools = append(tools, map[string]any{
 			"name":        name,
 			"description": description(name),
-			"inputSchema": map[string]any{"type": "object", "additionalProperties": true},
+			"inputSchema": inputSchema(name),
 		})
 	}
 	return tools
+}
+
+func inputSchema(name string) map[string]any {
+	str := map[string]any{"type": "string"}
+	integer := map[string]any{"type": "integer"}
+	switch name {
+	case "memo_add_memory":
+		return objectSchema(map[string]any{"title": str, "body": str})
+	case "memo_remove_memory":
+		return objectSchema(map[string]any{"id": integer}, "id")
+	case "memo_search_memory":
+		return objectSchema(map[string]any{
+			"query":            str,
+			"limit":            integer,
+			"min_vector_score": map[string]any{"type": "number"},
+		}, "query")
+	default:
+		return objectSchema(map[string]any{})
+	}
+}
+
+func objectSchema(properties map[string]any, required ...string) map[string]any {
+	schema := map[string]any{"type": "object", "properties": properties}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return schema
 }
 
 func description(name string) string {
